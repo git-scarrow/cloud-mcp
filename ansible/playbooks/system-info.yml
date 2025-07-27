@@ -1,0 +1,32 @@
+---
+- name: Gather system information from edge cluster
+  hosts: edge_cluster
+  gather_facts: yes
+  tasks:
+    - name: Display system information
+      debug:
+        msg: |
+          Device: {{ inventory_hostname }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Architecture: {{ ansible_architecture }}
+          CPU cores: {{ ansible_processor_vcpus }}
+          Memory: {{ ansible_memtotal_mb }}MB
+          Disk usage: {{ ansible_mounts[0].size_available | human_readable }} free of {{ ansible_mounts[0].size_total | human_readable }}
+          Uptime: {{ ansible_uptime_seconds | int | human_readable }}
+          
+    - name: Check k3s status
+      command: systemctl is-active k3s
+      register: k3s_status
+      ignore_errors: yes
+      when: k3s_role == "master"
+      
+    - name: Check k3s-agent status  
+      command: systemctl is-active k3s-agent
+      register: k3s_agent_status
+      ignore_errors: yes
+      when: k3s_role == "worker"
+      
+    - name: Display k3s status
+      debug:
+        msg: "K3s {{ k3s_role }} status: {{ k3s_status.stdout if k3s_role == 'master' else k3s_agent_status.stdout }}"
+      when: k3s_status is defined or k3s_agent_status is defined

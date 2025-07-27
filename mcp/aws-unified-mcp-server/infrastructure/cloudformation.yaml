@@ -1,0 +1,354 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS MCP Cognitive Load Reduction Infrastructure - Free Tier Optimized'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: 'mcp-cognitive-load'
+    Description: 'Name prefix for all resources'
+    
+  Environment:
+    Type: String
+    Default: 'dev'
+    AllowedValues: ['dev', 'prod']
+    Description: 'Environment name'
+
+Mappings:
+  EnvironmentConfig:
+    dev:
+      ReadCapacity: 1  # Minimum for cost optimization
+      WriteCapacity: 1
+      LambdaMemory: 128
+      LambdaTimeout: 30
+    prod:
+      ReadCapacity: 5   # Reduced from 25 for cost control
+      WriteCapacity: 5  # Reduced from 25 for cost control
+      LambdaMemory: 128 # Minimum memory for cost optimization
+      LambdaTimeout: 60 # Reduced timeout
+
+Resources:
+  # DynamoDB Tables for Context Management
+  
+  ContextsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-contexts'
+      BillingMode: PROVISIONED
+      AttributeDefinitions:
+        - AttributeName: sessionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: sessionId
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: !FindInMap [EnvironmentConfig, !Ref Environment, ReadCapacity]
+        WriteCapacityUnits: !FindInMap [EnvironmentConfig, !Ref Environment, WriteCapacity]
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: false  # Keep costs at zero
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'Context caching for MCP agents'
+
+  SessionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-sessions'
+      BillingMode: PROVISIONED
+      AttributeDefinitions:
+        - AttributeName: sessionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: sessionId
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: !FindInMap [EnvironmentConfig, !Ref Environment, ReadCapacity]
+        WriteCapacityUnits: !FindInMap [EnvironmentConfig, !Ref Environment, WriteCapacity]
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'Session state persistence'
+
+  MetricsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-metrics'
+      BillingMode: PROVISIONED
+      AttributeDefinitions:
+        - AttributeName: sessionId
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: sessionId
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: !FindInMap [EnvironmentConfig, !Ref Environment, ReadCapacity]
+        WriteCapacityUnits: !FindInMap [EnvironmentConfig, !Ref Environment, WriteCapacity]
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'Performance metrics and analytics'
+
+  UserPreferencesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-user-prefs'
+      BillingMode: PROVISIONED
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: !FindInMap [EnvironmentConfig, !Ref Environment, ReadCapacity]
+        WriteCapacityUnits: !FindInMap [EnvironmentConfig, !Ref Environment, WriteCapacity]
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'User preferences and settings'
+
+  QueryCacheTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-query-cache'
+      BillingMode: PROVISIONED
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: queryPattern
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: queryPattern
+          KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: !FindInMap [EnvironmentConfig, !Ref Environment, ReadCapacity]
+        WriteCapacityUnits: !FindInMap [EnvironmentConfig, !Ref Environment, WriteCapacity]
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'Cached query responses'
+
+  KnowledgeTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-knowledge'
+      BillingMode: PROVISIONED
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: service
+          AttributeType: S
+        - AttributeName: category
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: ServiceIndex
+          KeySchema:
+            - AttributeName: service
+              KeyType: HASH
+            - AttributeName: category
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+      ProvisionedThroughput:
+        ReadCapacityUnits: !FindInMap [EnvironmentConfig, !Ref Environment, ReadCapacity]
+        WriteCapacityUnits: !FindInMap [EnvironmentConfig, !Ref Environment, WriteCapacity]
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'Indexed AWS knowledge base'
+
+  # IAM Role for Lambda Functions
+  
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-lambda-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:BatchGetItem
+                  - dynamodb:BatchWriteItem
+                Resource:
+                  - !GetAtt ContextsTable.Arn
+                  - !GetAtt SessionsTable.Arn
+                  - !GetAtt MetricsTable.Arn
+                  - !GetAtt UserPreferencesTable.Arn
+                  - !GetAtt QueryCacheTable.Arn
+                  - !GetAtt KnowledgeTable.Arn
+                  - !Sub '${KnowledgeTable.Arn}/index/*'
+
+  # Lambda Function for Background Processing
+  
+  ContextProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-context-processor'
+      Runtime: nodejs18.x
+      Handler: context-processor.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          // Placeholder - deploy actual code separately
+          exports.handler = async (event) => {
+            console.log('Context processor triggered:', JSON.stringify(event));
+            return { statusCode: 200, body: 'Success' };
+          };
+      MemorySize: !FindInMap [EnvironmentConfig, !Ref Environment, LambdaMemory]
+      Timeout: !FindInMap [EnvironmentConfig, !Ref Environment, LambdaTimeout]
+      Environment:
+        Variables:
+          MCP_TABLE_PREFIX: !Ref ProjectName
+          AWS_REGION: !Ref AWS::Region
+          ENVIRONMENT: !Ref Environment
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'Background context processing'
+
+  # EventBridge Rule for Scheduled Processing (Free Tier)
+  
+  ScheduledProcessingRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${ProjectName}-scheduled-processing'
+      Description: 'Trigger context processing every hour'
+      ScheduleExpression: 'rate(15 minutes)'  # Near real-time updates ($0.24/month)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ContextProcessorFunction.Arn
+          Id: ContextProcessorTarget
+          Input: '{"processingType": "full"}'
+
+  # Permission for EventBridge to invoke Lambda
+  
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ContextProcessorFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ScheduledProcessingRule.Arn
+
+  # CloudWatch Log Groups (Free Tier - 5GB per month)
+  
+  ContextProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-context-processor'
+      RetentionInDays: 3  # Minimal retention for cost optimization
+      
+  # Dashboard removed to simplify IAM permissions
+
+Outputs:
+  ContextsTableName:
+    Description: 'Name of the contexts table'
+    Value: !Ref ContextsTable
+    Export:
+      Name: !Sub '${ProjectName}-contexts-table'
+
+  SessionsTableName:
+    Description: 'Name of the sessions table'
+    Value: !Ref SessionsTable
+    Export:
+      Name: !Sub '${ProjectName}-sessions-table'
+
+  KnowledgeTableName:
+    Description: 'Name of the knowledge table'
+    Value: !Ref KnowledgeTable
+    Export:
+      Name: !Sub '${ProjectName}-knowledge-table'
+
+  LambdaFunctionArn:
+    Description: 'ARN of the context processor Lambda function'
+    Value: !GetAtt ContextProcessorFunction.Arn
+    Export:
+      Name: !Sub '${ProjectName}-lambda-arn'
+
+
+  CostOptimizedUsage:
+    Description: 'Cost-optimized usage under $10/month'
+    Value: |
+      DynamoDB: ~10GB storage, 1-5 RCU/WCU (~$2.50/month after free tier)
+      Lambda: ~2,880 invocations/month (~$0.24/month after free tier)
+      CloudWatch: ~1GB logs (~$0.50/month after free tier)
+      EventBridge: ~2,880 events/month (free)
+      Total estimated cost after free tier: ~$3.24/month
+
+  SetupInstructions:
+    Description: 'Setup instructions'
+    Value: |
+      1. Deploy this template
+      2. Update Lambda function code
+      3. Set MCP_TABLE_PREFIX environment variable
+      4. Initialize knowledge base
+      5. Configure MCP client to use enhanced context

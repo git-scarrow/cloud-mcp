@@ -1,0 +1,35 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "MCPMinimalReadOnly",
+      "Effect": "Allow",
+      "Action": [
+        "sts:GetCallerIdentity",
+        "iam:GetUser",
+        "iam:ListAccessKeys"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "FreeTierSafeReads",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:ListFunctions",
+        "lambda:GetFunction",
+        "lambda:GetFunctionConfiguration",
+        "dynamodb:ListTables",
+        "dynamodb:DescribeTable",
+        "dynamodb:DescribeTimeToLive",
+        "s3:ListAllMyBuckets",
+        "s3:GetBucketLocation",
+        "cloudformation:ValidateTemplate",
+        "cloudformation:ListStacks",
+        "cloudformation:DescribeStacks",
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

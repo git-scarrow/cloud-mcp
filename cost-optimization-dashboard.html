@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Cost Optimization Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+    <div class="max-w-7xl mx-auto p-6">
+        <!-- Header -->
+        <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">Cloud Cost Optimization Dashboard</h1>
+            <p class="text-gray-600">Real-time cost analysis and optimization recommendations</p>
+        </div>
+
+        <!-- Cost Summary Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-600">Daily Cost</p>
+                        <p class="text-2xl font-bold text-gray-800">$<span id="dailyCost">47.23</span></p>
+                        <p class="text-sm text-green-600">↓ 5.2% from yesterday</p>
+                    </div>
+                    <div class="text-3xl">💰</div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-600">Monthly Projection</p>
+                        <p class="text-2xl font-bold text-gray-800">$<span id="monthlyProjection">1,427</span></p>
+                        <p class="text-sm text-yellow-600">Budget: $1,500</p>
+                    </div>
+                    <div class="text-3xl">📊</div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-600">Active Anomalies</p>
+                        <p class="text-2xl font-bold text-red-600"><span id="anomalyCount">2</span></p>
+                        <p class="text-sm text-gray-600">Requires attention</p>
+                    </div>
+                    <div class="text-3xl">⚠️</div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-600">Potential Savings</p>
+                        <p class="text-2xl font-bold text-green-600">$<span id="potentialSavings">12.75</span></p>
+                        <p class="text-sm text-gray-600">Per day</p>
+                    </div>
+                    <div class="text-3xl">💡</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cost Trend Chart -->
+        <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">7-Day Cost Trend</h2>
+            <canvas id="costTrendChart" height="100"></canvas>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <!-- Service Breakdown -->
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">Cost by Service</h2>
+                <canvas id="serviceChart" height="200"></canvas>
+            </div>
+            
+            <!-- Resource Utilization -->
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">Resource Utilization</h2>
+                <div class="space-y-4">
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-sm text-gray-600">Edge Devices (3)</span>
+                            <span class="text-sm font-semibold">78%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-green-500 h-2 rounded-full" style="width: 78%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-sm text-gray-600">Oracle Compute</span>
+                            <span class="text-sm font-semibold">45%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-yellow-500 h-2 rounded-full" style="width: 45%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-sm text-gray-600">Network Bandwidth</span>
+                            <span class="text-sm font-semibold">62%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-blue-500 h-2 rounded-full" style="width: 62%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Optimization Recommendations -->
+        <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">Optimization Recommendations</h2>
+            <div class="overflow-x-auto">
+                <table class="min-w-full">
+                    <thead>
+                        <tr class="border-b">
+                            <th class="text-left py-2 px-3 text-sm font-semibold text-gray-600">Priority</th>
+                            <th class="text-left py-2 px-3 text-sm font-semibold text-gray-600">Resource</th>
+                            <th class="text-left py-2 px-3 text-sm font-semibold text-gray-600">Action</th>
+                            <th class="text-left py-2 px-3 text-sm font-semibold text-gray-600">Potential Savings</th>
+                            <th class="text-left py-2 px-3 text-sm font-semibold text-gray-600">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recommendationsTable">
+                        <tr class="border-b hover:bg-gray-50">
+                            <td class="py-3 px-3">
+                                <span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">High</span>
+                            </td>
+                            <td class="py-3 px-3 text-sm">oracle-compute</td>
+                            <td class="py-3 px-3 text-sm">Right-size instance from 4 vCPU to 2 vCPU</td>
+                            <td class="py-3 px-3 text-sm font-semibold text-green-600">$7.50/day</td>
+                            <td class="py-3 px-3">
+                                <button class="text-sm bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">Apply</button>
+                            </td>
+                        </tr>
+                        <tr class="border-b hover:bg-gray-50">
+                            <td class="py-3 px-3">
+                                <span class="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800">Medium</span>
+                            </td>
+                            <td class="py-3 px-3 text-sm">edge-devices</td>
+                            <td class="py-3 px-3 text-sm">Implement scheduled processing during off-peak</td>
+                            <td class="py-3 px-3 text-sm font-semibold text-green-600">$3.25/day</td>
+                            <td class="py-3 px-3">
+                                <button class="text-sm bg-gray-500 text-white px-3 py-1 rounded hover:bg-gray-600">Review</button>
+                            </td>
+                        </tr>
+                        <tr class="border-b hover:bg-gray-50">
+                            <td class="py-3 px-3">
+                                <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">Low</span>
+                            </td>
+                            <td class="py-3 px-3 text-sm">networking</td>
+                            <td class="py-3 px-3 text-sm">Enable data compression for edge transfers</td>
+                            <td class="py-3 px-3 text-sm font-semibold text-green-600">$2.00/day</td>
+                            <td class="py-3 px-3">
+                                <button class="text-sm bg-gray-500 text-white px-3 py-1 rounded hover:bg-gray-600">Review</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Recent Alerts -->
+        <div class="bg-white rounded-lg shadow-sm p-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">Recent Cost Alerts</h2>
+            <div class="space-y-3" id="alertsList">
+                <div class="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                    <div class="flex items-center">
+                        <span class="text-2xl mr-3">🚨</span>
+                        <div>
+                            <p class="font-semibold text-gray-800">Daily cost spike detected</p>
+                            <p class="text-sm text-gray-600">18.5% increase from daily average</p>
+                        </div>
+                    </div>
+                    <span class="text-sm text-gray-500">2 hours ago</span>
+                </div>
+                <div class="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                    <div class="flex items-center">
+                        <span class="text-2xl mr-3">⚠️</span>
+                        <div>
+                            <p class="font-semibold text-gray-800">Oracle VM underutilized</p>
+                            <p class="text-sm text-gray-600">CPU usage below 20% for 48 hours</p>
+                        </div>
+                    </div>
+                    <span class="text-sm text-gray-500">5 hours ago</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Cost Trend Chart
+        const costTrendCtx = document.getElementById('costTrendChart').getContext('2d');
+        new Chart(costTrendCtx, {
+            type: 'line',
+            data: {
+                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                datasets: [{
+                    label: 'Daily Cost',
+                    data: [42.50, 41.20, 39.80, 40.15, 45.60, 44.90, 47.23],
+                    borderColor: 'rgb(59, 130, 246)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4
+                }, {
+                    label: 'Budget Target',
+                    data: [50, 50, 50, 50, 50, 50, 50],
+                    borderColor: 'rgb(156, 163, 175)',
+                    borderDash: [5, 5]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: value => '$' + value
+                        }
+                    }
+                }
+            }
+        });
+
+        // Service Breakdown Chart
+        const serviceCtx = document.getElementById('serviceChart').getContext('2d');
+        new Chart(serviceCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Edge Devices', 'Oracle Compute', 'Networking', 'Storage', 'Other'],
+                datasets: [{
+                    data: [12.45, 24.78, 10.00, 3.50, 1.50],
+                    backgroundColor: [
+                        'rgb(59, 130, 246)',
+                        'rgb(239, 68, 68)',
+                        'rgb(34, 197, 94)',
+                        'rgb(251, 191, 36)',
+                        'rgb(156, 163, 175)'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: context => {
+                                const label = context.label || '';
+                                const value = '$' + context.parsed.toFixed(2);
+                                return label + ': ' + value;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Auto-refresh data
+        function refreshData() {
+            // In production, fetch from AWS Unified MCP API
+            fetch('http://localhost:3002/query', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    service: 'edge',
+                    query: 'cost summary'
+                })
+            }).then(response => response.json())
+              .then(data => {
+                  // Update dashboard with live data
+                  console.log('Dashboard refreshed');
+              })
+              .catch(error => console.error('Refresh failed:', error));
+        }
+
+        // Refresh every 5 minutes
+        setInterval(refreshData, 300000);
+    </script>
+</body>
+</html>

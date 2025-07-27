@@ -1,0 +1,306 @@
+/**
+ * Budget Alert Workflow - Pipedream Template
+ * Monitors budget utilization and sends alerts when thresholds are exceeded
+ */
+
+export default {
+  name: "Cloud-Ops Budget Alert Workflow",
+  version: "0.1.0",
+  props: {
+    // HTTP trigger - receives budget data from sync service
+    http: {
+      type: "$.interface.http",
+      customResponse: true,
+    },
+    // Oracle database connection
+    oracle_connection_string: {
+      type: "string",
+      label: "Oracle Connection String",
+      description: "Oracle database connection string",
+      default: "localhost:1521/FREE"
+    },
+    oracle_user: {
+      type: "string", 
+      label: "Oracle Username",
+      default: "ANALYTICS"
+    },
+    oracle_password: {
+      type: "string",
+      label: "Oracle Password",
+      secret: true
+    },
+    // Notification settings
+    slack_webhook_url: {
+      type: "string",
+      label: "Slack Webhook URL",
+      description: "Slack webhook for budget alerts",
+      optional: true
+    },
+    email_recipient: {
+      type: "string",
+      label: "Alert Email",
+      description: "Email address for budget alerts",
+      optional: true
+    },
+    // Notion integration
+    notion_token: {
+      type: "string",
+      label: "Notion Integration Token", 
+      secret: true
+    },
+    notion_tasks_db: {
+      type: "string",
+      label: "Notion Tasks Database ID",
+      description: "Database ID for creating budget review tasks"
+    }
+  },
+
+  async run({ steps, $ }) {
+    // Step 1: Parse incoming budget data
+    const budgetData = steps.trigger.event.body;
+    
+    console.log("Received budget data:", budgetData);
+    
+    const {
+      project_id,
+      current_cost,
+      budget_monthly,
+      utilization_percent,
+      timestamp
+    } = budgetData;
+
+    // Step 2: Determine alert severity
+    let alertLevel = "info";
+    let alertMessage = "";
+    let shouldAlert = false;
+
+    if (utilization_percent >= 95) {
+      alertLevel = "critical";
+      alertMessage = `🔴 CRITICAL: Budget ${utilization_percent.toFixed(1)}% utilized ($${current_cost}/$${budget_monthly})`;
+      shouldAlert = true;
+    } else if (utilization_percent >= 90) {
+      alertLevel = "warning";
+      alertMessage = `🟡 WARNING: Budget ${utilization_percent.toFixed(1)}% utilized ($${current_cost}/$${budget_monthly})`;
+      shouldAlert = true;
+    } else if (utilization_percent >= 75) {
+      alertLevel = "notice";
+      alertMessage = `🟢 NOTICE: Budget ${utilization_percent.toFixed(1)}% utilized ($${current_cost}/$${budget_monthly})`;
+      shouldAlert = false; // Only log, don't alert
+    }
+
+    // Step 3: Send Slack alert if configured and threshold met
+    if (shouldAlert && this.slack_webhook_url) {
+      await $.send.http({
+        url: this.slack_webhook_url,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        data: {
+          text: alertMessage,
+          attachments: [{
+            color: alertLevel === "critical" ? "danger" : "warning",
+            fields: [
+              {
+                title: "Project",
+                value: project_id,
+                short: true
+              },
+              {
+                title: "Current Cost",
+                value: `$${current_cost}`,
+                short: true
+              },
+              {
+                title: "Budget",
+                value: `$${budget_monthly}`,
+                short: true
+              },
+              {
+                title: "Utilization",
+                value: `${utilization_percent.toFixed(1)}%`,
+                short: true
+              }
+            ],
+            footer: "Cloud-Ops Budget Monitor",
+            ts: Math.floor(new Date(timestamp).getTime() / 1000)
+          }]
+        }
+      });
+      console.log("Slack alert sent");
+    }
+
+    // Step 4: Send email alert if configured and threshold met
+    if (shouldAlert && this.email_recipient) {
+      await $.send.email({
+        to: this.email_recipient,
+        subject: `Cloud-Ops Budget Alert: ${alertLevel.toUpperCase()}`,
+        html: `
+          <h2>Budget Alert - ${project_id}</h2>
+          <p><strong>Alert Level:</strong> ${alertLevel.toUpperCase()}</p>
+          <p><strong>Current Cost:</strong> $${current_cost}</p>
+          <p><strong>Monthly Budget:</strong> $${budget_monthly}</p>
+          <p><strong>Utilization:</strong> ${utilization_percent.toFixed(1)}%</p>
+          <p><strong>Timestamp:</strong> ${timestamp}</p>
+          
+          <h3>Recommended Actions:</h3>
+          <ul>
+            <li>Review current resource utilization</li>
+            <li>Consider right-sizing underutilized resources</li>
+            <li>Check for cost anomalies or unexpected usage</li>
+            <li>Update budget if legitimate increased usage</li>
+          </ul>
+          
+          <p><em>This alert was generated by the Cloud-Ops Budget Monitor.</em></p>
+        `
+      });
+      console.log("Email alert sent");
+    }
+
+    // Step 5: Create Notion task for budget review if critical
+    if (alertLevel === "critical" && this.notion_token) {
+      const notionResponse = await $.send.http({
+        url: "https://api.notion.com/v1/pages",
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${this.notion_token}`,
+          "Content-Type": "application/json",
+          "Notion-Version": "2022-06-28"
+        },
+        data: {
+          parent: {
+            database_id: this.notion_tasks_db
+          },
+          properties: {
+            "Title": {
+              title: [
+                {
+                  text: {
+                    content: `URGENT: Budget Review Required - ${utilization_percent.toFixed(1)}% Utilized`
+                  }
+                }
+              ]
+            },
+            "Priority": {
+              select: {
+                name: "High"
+              }
+            },
+            "Status": {
+              select: {
+                name: "To Do"
+              }
+            },
+            "Due Date": {
+              date: {
+                start: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0] // Tomorrow
+              }
+            }
+          },
+          children: [
+            {
+              object: "block",
+              type: "paragraph",
+              paragraph: {
+                rich_text: [
+                  {
+                    type: "text",
+                    text: {
+                      content: `Critical budget alert triggered for project ${project_id}. Current utilization: ${utilization_percent.toFixed(1)}% ($${current_cost}/$${budget_monthly}).`
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              object: "block", 
+              type: "to_do",
+              to_do: {
+                rich_text: [
+                  {
+                    type: "text",
+                    text: {
+                      content: "Review current resource utilization and costs"
+                    }
+                  }
+                ],
+                checked: false
+              }
+            },
+            {
+              object: "block",
+              type: "to_do", 
+              to_do: {
+                rich_text: [
+                  {
+                    type: "text",
+                    text: {
+                      content: "Identify optimization opportunities"
+                    }
+                  }
+                ],
+                checked: false
+              }
+            },
+            {
+              object: "block",
+              type: "to_do",
+              to_do: {
+                rich_text: [
+                  {
+                    type: "text", 
+                    text: {
+                      content: "Implement cost reduction measures"
+                    }
+                  }
+                ],
+                checked: false
+              }
+            }
+          ]
+        }
+      });
+      console.log("Notion task created:", notionResponse.data?.id);
+    }
+
+    // Step 6: Log alert in Oracle database
+    if (shouldAlert) {
+      // Note: In production, would use proper Oracle client
+      console.log("Would log to Oracle:", {
+        alert_level: alertLevel,
+        project_id,
+        utilization_percent,
+        current_cost,
+        budget_monthly,
+        timestamp,
+        alert_message
+      });
+    }
+
+    // Step 7: Return response
+    await $.respond({
+      status: 200,
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: {
+        success: true,
+        alert_sent: shouldAlert,
+        alert_level: alertLevel,
+        message: alertMessage || `Budget OK: ${utilization_percent.toFixed(1)}% utilized`,
+        timestamp: new Date().toISOString()
+      }
+    });
+
+    return {
+      alert_level: alertLevel,
+      alert_sent: shouldAlert,
+      utilization_percent,
+      actions_taken: [
+        shouldAlert && this.slack_webhook_url ? "slack_alert" : null,
+        shouldAlert && this.email_recipient ? "email_alert" : null,
+        alertLevel === "critical" && this.notion_token ? "notion_task" : null
+      ].filter(Boolean)
+    };
+  }
+};

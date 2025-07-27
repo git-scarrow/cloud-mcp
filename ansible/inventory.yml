@@ -1,0 +1,41 @@
+---
+# Ansible inventory for Pi cluster
+all:
+  children:
+    edge_cluster:
+      children:
+        k3s_masters:
+          hosts:
+            pifive0:
+              ansible_host: pifive0.dory-phrygian.ts.net
+              ansible_user: sam
+              ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+              k3s_role: master
+              device_type: pi5
+              cpu_cores: 4
+              ram_gb: 8
+        k3s_workers:
+          hosts:
+            piiv:
+              ansible_host: piiv.dory-phrygian.ts.net
+              ansible_user: sam
+              ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+              k3s_role: worker
+              device_type: pi4
+              cpu_cores: 4
+              ram_gb: 4
+            piiv2:
+              ansible_host: piiv2.dory-phrygian.ts.net
+              ansible_user: sam
+              ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+              k3s_role: worker
+              device_type: pi4
+              cpu_cores: 4
+              ram_gb: 4
+      vars:
+        ansible_python_interpreter: /usr/bin/python3
+        ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+        k3s_cluster_name: edge-cluster
+        k3s_namespace: edge-cloud
+        backup_bucket: edge-backup-picluster-free
+        aws_region: us-east-1

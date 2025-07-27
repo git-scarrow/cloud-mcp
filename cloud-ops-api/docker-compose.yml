@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  cloud-ops-api:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - NOTION_TOKEN=${NOTION_TOKEN}
+      - ORACLE_DSN=${ORACLE_DSN}
+      - ORACLE_USER=${ORACLE_USER}
+      - ORACLE_PASSWORD=${ORACLE_PASSWORD}
+      - FLASK_ENV=development
+    volumes:
+      - ./app.py:/app/app.py
+    restart: unless-stopped
+    networks:
+      - cloud-ops-network
+
+networks:
+  cloud-ops-network:
+    driver: bridge

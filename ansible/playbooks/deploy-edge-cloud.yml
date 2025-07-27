@@ -1,0 +1,50 @@
+---
+- name: Deploy edge-cloud architecture
+  hosts: k3s_masters
+  vars:
+    manifests_dir: /tmp/edge-cloud-manifests
+    
+  tasks:
+    - name: Create manifests directory
+      file:
+        path: "{{ manifests_dir }}"
+        state: directory
+        
+    - name: Copy edge-cloud manifests
+      copy:
+        src: "{{ playbook_dir }}/../../edge-cloud-architecture.yaml"
+        dest: "{{ manifests_dir }}/edge-cloud-architecture.yaml"
+        
+    - name: Create edge-cloud namespace
+      command: k3s kubectl create namespace edge-cloud
+      become: yes
+      ignore_errors: yes
+      
+    - name: Apply edge-cloud manifests
+      command: k3s kubectl apply -f "{{ manifests_dir }}/edge-cloud-architecture.yaml"
+      become: yes
+      register: deploy_result
+      
+    - name: Display deployment result
+      debug:
+        msg: |
+          Deployment result:
+          {{ deploy_result.stdout }}
+          {{ deploy_result.stderr }}
+          
+    - name: Wait for pods to be ready
+      command: k3s kubectl wait --for=condition=ready pod --all -n edge-cloud --timeout=300s
+      become: yes
+      ignore_errors: yes
+      register: wait_result
+      
+    - name: Check final deployment status
+      command: k3s kubectl get all -n edge-cloud
+      become: yes
+      register: final_status
+      
+    - name: Display final status
+      debug:
+        msg: |
+          === FINAL DEPLOYMENT STATUS ===
+          {{ final_status.stdout }}

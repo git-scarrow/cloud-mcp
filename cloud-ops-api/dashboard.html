@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud-Ops Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold mb-8 text-gray-800">Cloud Operations Dashboard</h1>
+        
+        <!-- Status Card -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">System Status</h2>
+            <div id="status" class="grid grid-cols-3 gap-4">
+                <div class="text-center">
+                    <div id="api-status" class="text-2xl mb-2">⏳</div>
+                    <div class="text-sm text-gray-600">API</div>
+                </div>
+                <div class="text-center">
+                    <div id="aws-status" class="text-2xl mb-2">⏳</div>
+                    <div class="text-sm text-gray-600">AWS Unified</div>
+                </div>
+                <div class="text-center">
+                    <div id="oracle-status" class="text-2xl mb-2">⏳</div>
+                    <div class="text-sm text-gray-600">Oracle DB</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Budget Overview -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Budget Overview</h2>
+            <div id="budget-info">
+                <div class="mb-4">
+                    <div class="flex justify-between mb-2">
+                        <span>Monthly Budget</span>
+                        <span class="font-semibold">$<span id="monthly-budget">-</span></span>
+                    </div>
+                    <div class="flex justify-between mb-2">
+                        <span>Current Cost</span>
+                        <span class="font-semibold text-red-600">$<span id="current-cost">-</span></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Utilization</span>
+                        <span class="font-semibold"><span id="utilization">-</span>%</span>
+                    </div>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-4">
+                    <div id="budget-bar" class="bg-red-600 h-4 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Resources Table -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Cloud Resources</h2>
+            <div class="overflow-x-auto">
+                <table class="min-w-full table-auto">
+                    <thead>
+                        <tr class="bg-gray-50">
+                            <th class="px-4 py-2 text-left">Resource ID</th>
+                            <th class="px-4 py-2 text-left">Provider</th>
+                            <th class="px-4 py-2 text-left">Type</th>
+                            <th class="px-4 py-2 text-left">Status</th>
+                            <th class="px-4 py-2 text-right">CPU %</th>
+                            <th class="px-4 py-2 text-right">Memory %</th>
+                            <th class="px-4 py-2 text-right">Cost/Month</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resources-table">
+                        <!-- Resources will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Optimization Recommendations -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4">Optimization Recommendations</h2>
+            <div id="recommendations-list">
+                <!-- Recommendations will be loaded here -->
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_URL = 'http://localhost:5001';
+        
+        // Load system status
+        async function loadStatus() {
+            try {
+                const response = await axios.get(`${API_URL}/health`);
+                const data = response.data;
+                
+                document.getElementById('api-status').textContent = '✅';
+                document.getElementById('aws-status').textContent = data.services.aws_unified_mcp ? '✅' : '❌';
+                document.getElementById('oracle-status').textContent = data.services.oracle ? '✅' : '❌';
+            } catch (error) {
+                document.getElementById('api-status').textContent = '❌';
+            }
+        }
+        
+        // Load budget analytics
+        async function loadBudget() {
+            try {
+                const response = await axios.get(`${API_URL}/projects/analytics`);
+                const analytics = response.data.analytics;
+                
+                document.getElementById('monthly-budget').textContent = analytics.budget_monthly.toFixed(2);
+                document.getElementById('current-cost').textContent = analytics.current_monthly_cost.toFixed(2);
+                document.getElementById('utilization').textContent = Math.min(analytics.budget_utilization, 999).toFixed(1);
+                
+                const percentage = Math.min(analytics.budget_utilization, 100);
+                const budgetBar = document.getElementById('budget-bar');
+                budgetBar.style.width = `${percentage}%`;
+                
+                // Change color based on utilization
+                if (percentage > 90) {
+                    budgetBar.className = 'bg-red-600 h-4 rounded-full';
+                } else if (percentage > 75) {
+                    budgetBar.className = 'bg-yellow-500 h-4 rounded-full';
+                } else {
+                    budgetBar.className = 'bg-green-500 h-4 rounded-full';
+                }
+            } catch (error) {
+                console.error('Failed to load budget:', error);
+            }
+        }
+        
+        // Load resources
+        async function loadResources() {
+            try {
+                const response = await axios.get(`${API_URL}/resources`);
+                const resources = response.data.resources;
+                
+                const tbody = document.getElementById('resources-table');
+                tbody.innerHTML = resources.map(resource => `
+                    <tr class="border-t">
+                        <td class="px-4 py-2">${resource.resource_id}</td>
+                        <td class="px-4 py-2">
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium
+                                ${resource.provider === 'AWS' ? 'bg-orange-100 text-orange-800' : ''}
+                                ${resource.provider === 'GCP' ? 'bg-blue-100 text-blue-800' : ''}
+                                ${resource.provider === 'DigitalOcean' ? 'bg-indigo-100 text-indigo-800' : ''}">
+                                ${resource.provider}
+                            </span>
+                        </td>
+                        <td class="px-4 py-2">${resource.resource_type}</td>
+                        <td class="px-4 py-2">
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium
+                                ${resource.status === 'Running' || resource.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
+                                ${resource.status}
+                            </span>
+                        </td>
+                        <td class="px-4 py-2 text-right">${resource.cpu_usage}%</td>
+                        <td class="px-4 py-2 text-right">${resource.memory_usage}%</td>
+                        <td class="px-4 py-2 text-right">$${resource.cost_monthly.toFixed(2)}</td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load resources:', error);
+            }
+        }
+        
+        // Load optimization recommendations
+        async function loadRecommendations() {
+            try {
+                const response = await axios.get(`${API_URL}/optimize/recommendations`);
+                const recommendations = response.data.recommendations;
+                
+                const list = document.getElementById('recommendations-list');
+                
+                if (recommendations.length === 0) {
+                    list.innerHTML = '<p class="text-gray-600">No optimization recommendations at this time.</p>';
+                } else {
+                    list.innerHTML = recommendations.map(rec => `
+                        <div class="border-l-4 border-yellow-400 bg-yellow-50 p-4 mb-2">
+                            <div class="flex">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div class="ml-3">
+                                    <p class="text-sm text-yellow-700">
+                                        <strong>${rec.resource_id}</strong> - ${rec.recommendation}
+                                    </p>
+                                    <p class="text-sm text-yellow-600 mt-1">
+                                        Potential savings: $${rec.potential_savings.toFixed(2)}/month
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                    
+                    list.innerHTML += `
+                        <div class="mt-4 text-right">
+                            <span class="text-lg font-semibold">Total Potential Savings: $${response.data.total_potential_savings.toFixed(2)}/month</span>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Failed to load recommendations:', error);
+            }
+        }
+        
+        // Load all data
+        async function loadDashboard() {
+            await loadStatus();
+            await loadBudget();
+            await loadResources();
+            await loadRecommendations();
+        }
+        
+        // Initial load
+        loadDashboard();
+        
+        // Refresh every 30 seconds
+        setInterval(loadDashboard, 30000);
+    </script>
+</body>
+</html>

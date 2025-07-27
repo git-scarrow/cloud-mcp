@@ -1,0 +1,52 @@
+---
+- name: Manage edge sync operations
+  hosts: edge_cluster
+  vars:
+    sync_script_path: /usr/local/bin/edge-sync-free-tier.sh
+    backup_dir: /opt/edge-backups
+    
+  tasks:
+    - name: Create backup directory
+      file:
+        path: "{{ backup_dir }}"
+        state: directory
+        mode: '0755'
+      become: yes
+      
+    - name: Copy edge sync script
+      copy:
+        src: "{{ playbook_dir }}/../../edge-sync-free-tier.sh"
+        dest: "{{ sync_script_path }}"
+        mode: '0755'
+      become: yes
+      
+    - name: Install AWS CLI if not present
+      package:
+        name: awscli
+        state: present
+      become: yes
+      ignore_errors: yes
+      
+    - name: Check last sync time
+      stat:
+        path: "{{ backup_dir }}/last_sync"
+      register: last_sync_file
+      
+    - name: Display last sync info
+      debug:
+        msg: |
+          Device: {{ inventory_hostname }}
+          Last sync: {{ last_sync_file.stat.mtime | default('never') | human_readable if last_sync_file.stat.exists else 'never' }}
+          Backup dir size: {{ backup_dir_size.stdout | default('unknown') }}
+      vars:
+        backup_dir_size: "{{ ansible_facts }}"
+        
+    - name: Run edge sync (dry run)
+      command: "{{ sync_script_path }} --dry-run"
+      register: sync_result
+      ignore_errors: yes
+      when: last_sync_file.stat.exists
+      
+    - name: Display sync status
+      debug:
+        msg: "Sync status: {{ sync_result.stdout_lines | default(['Sync script not found or never run']) }}"

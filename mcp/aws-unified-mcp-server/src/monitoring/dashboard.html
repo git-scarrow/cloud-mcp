@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWS Unified MCP Server - Security Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            line-height: 1.6;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid #334155;
+        }
+        
+        .header h1 {
+            color: #f8fafc;
+            font-size: 1.875rem;
+            font-weight: 700;
+        }
+        
+        .header p {
+            color: #94a3b8;
+            margin-top: 0.5rem;
+        }
+        
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            font-size: 0.875rem;
+        }
+        
+        .status-healthy { background: #065f46; color: #a7f3d0; }
+        .status-degraded { background: #92400e; color: #fde68a; }
+        .status-unhealthy { background: #991b1b; color: #fecaca; }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            padding: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        
+        .card h2 {
+            color: #f8fafc;
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #334155;
+        }
+        
+        .metric:last-child { border-bottom: none; }
+        
+        .metric-label {
+            color: #94a3b8;
+            font-size: 0.875rem;
+        }
+        
+        .metric-value {
+            font-weight: 600;
+            font-size: 1.125rem;
+        }
+        
+        .metric-value.success { color: #10b981; }
+        .metric-value.warning { color: #f59e0b; }
+        .metric-value.danger { color: #ef4444; }
+        
+        .chart-container {
+            position: relative;
+            height: 200px;
+            margin-top: 1rem;
+        }
+        
+        .alert {
+            background: #991b1b;
+            border: 1px solid #dc2626;
+            color: #fecaca;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .logs {
+            background: #111827;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.75rem;
+            max-height: 300px;
+            overflow-y: auto;
+            color: #9ca3af;
+        }
+        
+        .log-entry {
+            margin-bottom: 0.5rem;
+            padding: 0.25rem;
+        }
+        
+        .log-error { color: #ef4444; }
+        .log-warning { color: #f59e0b; }
+        .log-info { color: #3b82f6; }
+        .log-success { color: #10b981; }
+        
+        .refresh-button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
+        
+        .refresh-button:hover {
+            background: #2563eb;
+        }
+        
+        .auto-refresh {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #94a3b8;
+            font-size: 0.875rem;
+        }
+        
+        .icon {
+            width: 1.25rem;
+            height: 1.25rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h1>🛡️ AWS Unified MCP Server - Security Dashboard</h1>
+                <p>Real-time monitoring and security analytics</p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <span id="serverStatus" class="status-indicator status-healthy">
+                    ● Server Online
+                </span>
+                <button class="refresh-button" onclick="refreshDashboard()">Refresh</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="dashboard">
+        <!-- System Health -->
+        <div class="card">
+            <h2>🏥 System Health</h2>
+            <div class="metric">
+                <span class="metric-label">Server Status</span>
+                <span id="healthStatus" class="metric-value success">Healthy</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Uptime</span>
+                <span id="uptime" class="metric-value">--</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Memory Usage</span>
+                <span id="memoryUsage" class="metric-value">--</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Oracle Connection</span>
+                <span id="oracleStatus" class="metric-value success">Connected</span>
+            </div>
+        </div>
+
+        <!-- Authentication Metrics -->
+        <div class="card">
+            <h2>🔐 Authentication</h2>
+            <div class="metric">
+                <span class="metric-label">Auth Success Rate (24h)</span>
+                <span id="authSuccessRate" class="metric-value success">98.5%</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Failed Logins (1h)</span>
+                <span id="failedLogins" class="metric-value">0</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Active API Keys</span>
+                <span id="activeApiKeys" class="metric-value">3</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">JWT Tokens Issued</span>
+                <span id="jwtTokens" class="metric-value">--</span>
+            </div>
+        </div>
+
+        <!-- Rate Limiting -->
+        <div class="card">
+            <h2>⚡ Rate Limiting</h2>
+            <div class="metric">
+                <span class="metric-label">Requests (5min)</span>
+                <span id="requestCount" class="metric-value">--</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Rate Limited (1h)</span>
+                <span id="rateLimited" class="metric-value">0</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Pipedream Req/min</span>
+                <span id="pipedreamRate" class="metric-value success">12/500</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Monitoring Req/min</span>
+                <span id="monitoringRate" class="metric-value success">5/200</span>
+            </div>
+        </div>
+
+        <!-- Security Events -->
+        <div class="card">
+            <h2>🚨 Security Events</h2>
+            <div class="metric">
+                <span class="metric-label">SQL Injection Attempts</span>
+                <span id="sqlInjectionAttempts" class="metric-value">0</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Suspicious Activity</span>
+                <span id="suspiciousActivity" class="metric-value">0</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Blocked IPs</span>
+                <span id="blockedIps" class="metric-value">0</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Access Violations</span>
+                <span id="accessViolations" class="metric-value">0</span>
+            </div>
+        </div>
+
+        <!-- Request Distribution Chart -->
+        <div class="card">
+            <h2>📊 Request Distribution</h2>
+            <div class="chart-container">
+                <canvas id="requestChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Performance Metrics -->
+        <div class="card">
+            <h2>🚀 Performance</h2>
+            <div class="metric">
+                <span class="metric-label">Avg Response Time</span>
+                <span id="avgResponseTime" class="metric-value">--</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">99th Percentile</span>
+                <span id="p99ResponseTime" class="metric-value">--</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Error Rate</span>
+                <span id="errorRate" class="metric-value success">0.1%</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Queries/sec</span>
+                <span id="queriesPerSec" class="metric-value">--</span>
+            </div>
+        </div>
+
+        <!-- Security Log -->
+        <div class="card" style="grid-column: 1 / -1;">
+            <h2>📋 Security Event Log</h2>
+            <div class="logs" id="securityLogs">
+                <div class="log-entry log-success">[2025-07-27 12:00:01] Authentication successful for apikey-*** from 100.64.0.1</div>
+                <div class="log-entry log-info">[2025-07-27 12:00:05] Health check accessed from monitoring system</div>
+                <div class="log-entry log-success">[2025-07-27 12:00:12] MCP query executed successfully - service: oracle-mirror</div>
+                <div class="log-entry log-info">[2025-07-27 12:00:18] Rate limit check passed for pipedream workflow</div>
+                <div class="log-entry log-success">[2025-07-27 12:00:23] Secrets loaded successfully from 1Password</div>
+            </div>
+        </div>
+
+        <!-- Active Sessions -->
+        <div class="card">
+            <h2>👥 Active Sessions</h2>
+            <div class="metric">
+                <span class="metric-label">Pipedream Workflows</span>
+                <span id="pipedreamSessions" class="metric-value success">2</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Monitoring Tools</span>
+                <span id="monitoringSessions" class="metric-value success">1</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Admin Sessions</span>
+                <span id="adminSessions" class="metric-value">0</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Total Connections</span>
+                <span id="totalConnections" class="metric-value">3</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Request distribution chart
+        const ctx = document.getElementById('requestChart').getContext('2d');
+        const requestChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Health Checks', 'MCP Queries', 'Auth Requests', 'API Calls'],
+                datasets: [{
+                    data: [45, 30, 15, 10],
+                    backgroundColor: [
+                        '#10b981',
+                        '#3b82f6', 
+                        '#f59e0b',
+                        '#8b5cf6'
+                    ],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            color: '#e2e8f0',
+                            padding: 10,
+                            font: { size: 11 }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Dashboard refresh function
+        async function refreshDashboard() {
+            try {
+                // Get real-time metrics from API
+                const metricsResponse = await fetch('/api/dashboard/metrics');
+                
+                if (metricsResponse.ok) {
+                    const metrics = await metricsResponse.json();
+                    updateDashboardMetrics(metrics);
+                    updateServerStatus(metrics.systemHealth.status);
+                } else {
+                    updateServerStatus('unhealthy');
+                }
+                
+                // Get security logs
+                const logsResponse = await fetch('/api/dashboard/logs');
+                if (logsResponse.ok) {
+                    const logData = await logsResponse.json();
+                    updateSecurityLogsFromAPI(logData.logs);
+                }
+                
+            } catch (error) {
+                console.error('Dashboard refresh failed:', error);
+                updateServerStatus('unhealthy');
+            }
+        }
+
+        function updateDashboardMetrics(metrics) {
+            // System Health
+            const healthStatus = document.getElementById('healthStatus');
+            healthStatus.textContent = metrics.systemHealth.status.charAt(0).toUpperCase() + metrics.systemHealth.status.slice(1);
+            healthStatus.className = `metric-value ${metrics.systemHealth.status === 'healthy' ? 'success' : metrics.systemHealth.status === 'degraded' ? 'warning' : 'danger'}`;
+            
+            document.getElementById('uptime').textContent = formatUptime(metrics.systemHealth.uptime);
+            document.getElementById('memoryUsage').textContent = `${metrics.systemHealth.memoryUsage}%`;
+            
+            const oracleStatus = document.getElementById('oracleStatus');
+            oracleStatus.textContent = metrics.systemHealth.oracleConnection ? 'Connected' : 'Disconnected';
+            oracleStatus.className = `metric-value ${metrics.systemHealth.oracleConnection ? 'success' : 'danger'}`;
+            
+            // Authentication
+            document.getElementById('authSuccessRate').textContent = `${metrics.authentication.successRate24h.toFixed(1)}%`;
+            document.getElementById('failedLogins').textContent = metrics.authentication.failedLogins1h;
+            document.getElementById('activeApiKeys').textContent = metrics.authentication.activeApiKeys;
+            document.getElementById('jwtTokens').textContent = metrics.authentication.jwtTokensIssued;
+            
+            // Rate Limiting
+            document.getElementById('requestCount').textContent = metrics.rateLimiting.requests5min;
+            document.getElementById('rateLimited').textContent = metrics.rateLimiting.rateLimited1h;
+            document.getElementById('pipedreamRate').textContent = `${metrics.rateLimiting.pipedreamUsage.current}/${metrics.rateLimiting.pipedreamUsage.limit}`;
+            document.getElementById('monitoringRate').textContent = `${metrics.rateLimiting.monitoringUsage.current}/${metrics.rateLimiting.monitoringUsage.limit}`;
+            
+            // Security Events
+            document.getElementById('sqlInjectionAttempts').textContent = metrics.security.sqlInjectionAttempts;
+            document.getElementById('suspiciousActivity').textContent = metrics.security.suspiciousActivity;
+            document.getElementById('blockedIps').textContent = metrics.security.blockedIps;
+            document.getElementById('accessViolations').textContent = metrics.security.accessViolations;
+            
+            // Performance
+            document.getElementById('avgResponseTime').textContent = `${metrics.performance.avgResponseTime}ms`;
+            document.getElementById('p99ResponseTime').textContent = `${metrics.performance.p99ResponseTime}ms`;
+            document.getElementById('errorRate').textContent = `${metrics.performance.errorRate}%`;
+            document.getElementById('queriesPerSec').textContent = metrics.performance.queriesPerSecond.toFixed(1);
+            
+            // Sessions
+            document.getElementById('pipedreamSessions').textContent = metrics.sessions.pipedreamSessions;
+            document.getElementById('monitoringSessions').textContent = metrics.sessions.monitoringSessions;
+            document.getElementById('adminSessions').textContent = metrics.sessions.adminSessions;
+            document.getElementById('totalConnections').textContent = metrics.sessions.totalConnections;
+        }
+
+        function updateServerStatus(status) {
+            const statusElement = document.getElementById('serverStatus');
+            statusElement.className = `status-indicator status-${status}`;
+            
+            switch (status) {
+                case 'healthy':
+                    statusElement.textContent = '● Server Online';
+                    break;
+                case 'degraded':
+                    statusElement.textContent = '⚠ Server Degraded';
+                    break;
+                case 'unhealthy':
+                    statusElement.textContent = '✗ Server Offline';
+                    break;
+            }
+        }
+
+        function updateMetrics() {
+            // Simulate real-time metrics
+            const now = new Date();
+            
+            // Response times
+            document.getElementById('avgResponseTime').textContent = 
+                Math.round(Math.random() * 50 + 20) + 'ms';
+            document.getElementById('p99ResponseTime').textContent = 
+                Math.round(Math.random() * 100 + 150) + 'ms';
+            
+            // Request counts
+            document.getElementById('requestCount').textContent = 
+                Math.round(Math.random() * 200 + 100);
+            document.getElementById('queriesPerSec').textContent = 
+                (Math.random() * 5 + 2).toFixed(1);
+                
+            // JWT tokens
+            document.getElementById('jwtTokens').textContent = 
+                Math.round(Math.random() * 10 + 5);
+        }
+
+        function updateSecurityLogsFromAPI(logEntries) {
+            const logs = document.getElementById('securityLogs');
+            logs.innerHTML = ''; // Clear existing logs
+            
+            logEntries.slice(0, 20).forEach(entry => {
+                const logEntry = document.createElement('div');
+                const timestamp = new Date(entry.timestamp).toISOString().replace('T', ' ').substring(0, 19);
+                
+                // Determine log level from event type
+                let logClass = 'log-info';
+                if (entry.eventType) {
+                    if (entry.eventType.includes('auth_success') || entry.eventType.includes('success')) {
+                        logClass = 'log-success';
+                    } else if (entry.eventType.includes('auth_failure') || entry.eventType.includes('error')) {
+                        logClass = 'log-error';
+                    } else if (entry.eventType.includes('warning') || entry.eventType.includes('rate_limit')) {
+                        logClass = 'log-warning';
+                    }
+                }
+                
+                logEntry.className = `log-entry ${logClass}`;
+                logEntry.textContent = `[${timestamp}] ${entry.message || entry.eventType || 'Security event'}`;
+                logs.appendChild(logEntry);
+            });
+        }
+
+        function formatUptime(seconds) {
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            
+            if (days > 0) {
+                return `${days}d ${hours}h ${minutes}m`;
+            } else if (hours > 0) {
+                return `${hours}h ${minutes}m`;
+            } else {
+                return `${minutes}m`;
+            }
+        }
+
+        function getApiKey() {
+            // In production, this would be securely configured
+            return 'monitoring-key-placeholder';
+        }
+
+        // Auto-refresh every 30 seconds
+        setInterval(refreshDashboard, 30000);
+        
+        // Initial load
+        refreshDashboard();
+        
+        console.log('🛡️ AWS Unified MCP Server Security Dashboard loaded');
+        console.log('📊 Real-time monitoring active');
+    </script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+# Environment and Configuration
+.env
+.env.local
+.env.production
+.env.json
+config.local.py
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Test files (moved to tests/)
+tests/
+
+# Oracle
+*.dmp
+*.log
+oracle_wallet/
+
+# Notion
+notion_backup/
+
+# Logs
+*.log
+logs/
+*.out
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Docker
+docker-compose.override.yml
+
+# Temporary files
+*.tmp
+*.bak
+*.cache
+temp/
+
+# Sensitive data
+secrets/
+credentials/
+*.pem
+*.key
+*.cert
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+
+# Node (for any JS tools)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

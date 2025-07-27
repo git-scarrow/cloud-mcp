@@ -1,0 +1,228 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'MCP Cognitive Load Reducer - Simplified Infrastructure'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: 'mcp-cognitive-load'
+    Description: 'Project name prefix for all resources'
+    
+  Environment:
+    Type: String
+    Default: 'prod'
+    AllowedValues: ['dev', 'prod']
+    Description: 'Environment name'
+
+Resources:
+  # DynamoDB Tables (without TTL to avoid permission issues)
+  
+  ContextsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-contexts'
+      AttributeDefinitions:
+        - AttributeName: sessionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: sessionId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST  # Simpler than provisioned
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  SessionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-sessions'
+      AttributeDefinitions:
+        - AttributeName: sessionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: sessionId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  MetricsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-metrics'
+      AttributeDefinitions:
+        - AttributeName: sessionId
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: sessionId
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  UserPreferencesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-user-prefs'
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  QueryCacheTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-query-cache'
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: queryPattern
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: queryPattern
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  KnowledgeTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-knowledge'
+      AttributeDefinitions:
+        - AttributeName: serviceId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: serviceId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Lambda Function
+  ContextProcessorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-lambda-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:UpdateItem'
+                  - 'dynamodb:Scan'
+                  - 'dynamodb:Query'
+                Resource:
+                  - !GetAtt ContextsTable.Arn
+                  - !GetAtt SessionsTable.Arn
+                  - !GetAtt MetricsTable.Arn
+                  - !GetAtt UserPreferencesTable.Arn
+                  - !GetAtt QueryCacheTable.Arn
+                  - !GetAtt KnowledgeTable.Arn
+
+  ContextProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-context-processor'
+      Runtime: nodejs18.x
+      Handler: context-processor.handler
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+              console.log('Context processor placeholder');
+              return { statusCode: 200, body: 'OK' };
+          };
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          MCP_TABLE_PREFIX: !Ref ProjectName
+      Role: !GetAtt ContextProcessorRole.Arn
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # EventBridge Rule for scheduled processing
+  ScheduledProcessingRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${ProjectName}-scheduled-processing'
+      Description: 'Trigger context processing every 15 minutes'
+      ScheduleExpression: 'rate(15 minutes)'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ContextProcessorFunction.Arn
+          Id: ContextProcessorTarget
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ContextProcessorFunction
+      Action: 'lambda:InvokeFunction'
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ScheduledProcessingRule.Arn
+
+Outputs:
+  ContextsTableName:
+    Description: 'Name of the contexts table'
+    Value: !Ref ContextsTable
+    
+  LambdaFunctionArn:
+    Description: 'ARN of the Lambda function'
+    Value: !GetAtt ContextProcessorFunction.Arn
+    
+  CostOptimizedUsage:
+    Description: 'Cost-optimized usage under $10/month'
+    Value: |
+      DynamoDB: PAY_PER_REQUEST mode (~$1.25 per million requests)
+      Lambda: ~2,880 invocations/month (~$0.24/month after free tier)
+      Total estimated cost: ~$2-3/month with moderate usage
+      
+  SetupInstructions:
+    Description: 'Setup instructions'
+    Value: |
+      1. Deploy Lambda code: ./deploy-lambda.sh
+      2. Initialize knowledge base: ./init-knowledge.sh
+      3. Update MCP config to use enhanced context

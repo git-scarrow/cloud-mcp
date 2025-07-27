@@ -1,0 +1,1 @@
+{"statusCode":200,"body":"{\"message\":\"PhotoSight intelligence processing completed successfully (DEMO MODE)\",\"results\":{\"analysisInsights\":1,\"qualityTrends\":1,\"equipmentPerformance\":1,\"processingOptimizations\":1,\"errors\":[],\"executionTime\":896},\"note\":\"This is simulated data. Configure Oracle credentials for real analysis.\"}"}

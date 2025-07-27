@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  grafana:
+    image: grafana/grafana:latest
+    container_name: cloud-ops-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel,grafana-worldmap-panel
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    volumes:
+      - grafana-storage:/var/lib/grafana
+      - ./provisioning:/etc/grafana/provisioning
+      - ./dashboards:/var/lib/grafana/dashboards
+    networks:
+      - cloud-ops-network
+    restart: unless-stopped
+
+  # Oracle connection proxy for Grafana
+  # Since Grafana doesn't have native Oracle support, we'll use a REST API proxy
+  oracle-proxy:
+    build: .
+    container_name: oracle-proxy
+    ports:
+      - "5002:5000"
+    environment:
+      - ORACLE_DSN=${ORACLE_DSN}
+      - ORACLE_USER=${ORACLE_USER}
+      - ORACLE_PASSWORD=${ORACLE_PASSWORD}
+    networks:
+      - cloud-ops-network
+    restart: unless-stopped
+
+volumes:
+  grafana-storage:
+
+networks:
+  cloud-ops-network:
+    driver: bridge

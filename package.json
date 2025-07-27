@@ -1,0 +1,11 @@
+{
+  "name": "photosight-intelligence-lambda",
+  "version": "1.0.0",
+  "description": "PhotoSight Oracle database intelligence processor",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.848.0",
+    "@aws-sdk/lib-dynamodb": "^3.850.0",
+    "oracledb": "^6.9.0"
+  }
+}

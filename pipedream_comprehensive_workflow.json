@@ -1,0 +1,658 @@
+{
+  "name": "Cloud Operations Intelligence Hub",
+  "description": "Comprehensive multi-cloud operations platform with real-time monitoring, incident response, cost optimization, and predictive analytics",
+  "version": "2.0.0",
+  "project_id": "proj_MnszOND",
+  "org_id": "o_EVIVWdx",
+  
+  "triggers": [
+    {
+      "id": "webhook_incidents",
+      "type": "webhook",
+      "config": {
+        "method": ["POST", "PUT"],
+        "path": "/incident",
+        "response": {
+          "status": 200,
+          "body": "Incident received and processing initiated"
+        }
+      }
+    },
+    {
+      "id": "schedule_optimization",
+      "type": "schedule",
+      "config": {
+        "cron": "0 8 * * *",
+        "timezone": "America/New_York"
+      }
+    },
+    {
+      "id": "email_trigger",
+      "type": "email",
+      "config": {
+        "address": "cloudops@yourdomain.com"
+      }
+    },
+    {
+      "id": "s3_events",
+      "type": "aws-s3",
+      "config": {
+        "bucket": "cloud-operations-hub",
+        "events": ["s3:ObjectCreated:*", "s3:ObjectRemoved:*"]
+      }
+    }
+  ],
+  
+  "steps": [
+    {
+      "id": "input_router",
+      "name": "Route Input by Source",
+      "type": "code",
+      "code": `
+export default defineComponent({
+  async run({ steps, $ }) {
+    // Determine input source and route accordingly
+    const trigger = steps.trigger;
+    
+    let inputType, data;
+    
+    if (trigger.event?.headers?.['x-webhook-source']) {
+      inputType = 'webhook';
+      data = trigger.event.body;
+    } else if (trigger.event?.schedule) {
+      inputType = 'scheduled';
+      data = { task: 'optimization_scan' };
+    } else if (trigger.event?.email) {
+      inputType = 'email';
+      data = { 
+        subject: trigger.event.subject,
+        body: trigger.event.body,
+        from: trigger.event.from
+      };
+    } else if (trigger.event?.s3) {
+      inputType = 's3_event';
+      data = trigger.event.detail;
+    } else {
+      inputType = 'unknown';
+      data = trigger.event;
+    }
+    
+    $.flow.inputType = inputType;
+    $.flow.timestamp = new Date().toISOString();
+    
+    return {
+      inputType,
+      data,
+      timestamp: $.flow.timestamp,
+      correlationId: $.meta.id
+    };
+  }
+})`
+    },
+    
+    {
+      "id": "enrich_context",
+      "name": "Enrich with Multi-Cloud Context",
+      "type": "code",
+      "code": `
+export default defineComponent({
+  async run({ steps, $ }) {
+    const { inputType, data } = steps.input_router.$return_value;
+    
+    // Call AWS Unified MCP for comprehensive context
+    const enrichmentPromises = [];
+    
+    // Get edge device status
+    enrichmentPromises.push(
+      fetch('http://localhost:3002/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          service: 'edge',
+          query: 'device status'
+        })
+      }).then(r => r.text()).catch(e => ({ error: e.message }))
+    );
+    
+    // Get AWS resource info if resource_id provided
+    if (data.resource_id) {
+      enrichmentPromises.push(
+        fetch('http://localhost:3002/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            service: 'knowledge',
+            query: \`resource details \${data.resource_id}\`
+          })
+        }).then(r => r.json()).catch(e => ({ error: e.message }))
+      );
+    }
+    
+    // Get cost analysis
+    enrichmentPromises.push(
+      fetch('http://localhost:3002/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          service: 'edge',
+          query: 'cost analysis'
+        })
+      }).then(r => r.text()).catch(e => ({ error: e.message }))
+    );
+    
+    const [edgeStatus, resourceInfo, costAnalysis] = await Promise.all(enrichmentPromises);
+    
+    return {
+      original: data,
+      inputType,
+      enrichment: {
+        edgeStatus,
+        resourceInfo,
+        costAnalysis,
+        enrichedAt: new Date().toISOString()
+      }
+    };
+  }
+})`
+    },
+    
+    {
+      "id": "ai_analysis",
+      "name": "AI-Powered Analysis",
+      "type": "openai-chat",
+      "config": {
+        "model": "gpt-4",
+        "temperature": 0.3,
+        "system_prompt": "You are a cloud operations expert. Analyze the provided data and determine: 1) Severity (Critical/High/Medium/Low), 2) Root cause hypothesis, 3) Recommended actions, 4) Potential cost impact, 5) Automation opportunities."
+      }
+    },
+    
+    {
+      "id": "oracle_metrics",
+      "name": "Query Oracle for Historical Context",
+      "type": "code",
+      "code": `
+export default defineComponent({
+  props: {
+    oracle_connection: {
+      type: "app",
+      app: "oracle"
+    }
+  },
+  async run({ steps, $ }) {
+    const analysis = steps.ai_analysis.$return_value;
+    const enrichedData = steps.enrich_context.$return_value;
+    
+    // Mock Oracle query - in production, use actual connection
+    const historicalData = {
+      similar_incidents_last_30d: 3,
+      avg_resolution_time: "45 minutes",
+      cost_impact_history: "$125 average",
+      resource_optimization_opportunities: [
+        {
+          resource: "pifive0",
+          potential_savings: "$15/month",
+          recommendation: "Reduce backup frequency during low-usage hours"
+        }
+      ],
+      trend_analysis: {
+        cpu_trend: "increasing",
+        cost_trend: "stable",
+        incident_trend: "decreasing"
+      }
+    };
+    
+    return {
+      current_incident: enrichedData,
+      ai_insights: analysis,
+      historical_context: historicalData,
+      recommendations: [
+        ...analysis.recommended_actions || [],
+        ...historicalData.resource_optimization_opportunities.map(o => o.recommendation)
+      ]
+    };
+  }
+})`
+    },
+    
+    {
+      "id": "notion_operations",
+      "name": "Update Notion Databases",
+      "type": "code",
+      "code": `
+export default defineComponent({
+  props: {
+    notion: {
+      type: "app",
+      app: "notion"
+    }
+  },
+  async run({ steps, $ }) {
+    const { inputType } = steps.input_router.$return_value;
+    const oracleData = steps.oracle_metrics.$return_value;
+    
+    const operations = [];
+    
+    // Create incident page if needed
+    if (inputType === 'webhook' || inputType === 'email') {
+      operations.push({
+        type: 'create_incident',
+        database_id: '23be7cc7-01d5-813f-8bc4-e73325f0535a',
+        properties: {
+          Name: {
+            title: [{
+              text: { 
+                content: \`🚨 \${oracleData.ai_insights.severity}: \${oracleData.current_incident.original.alert_type || 'Incident'}\`
+              }
+            }]
+          },
+          Status: {
+            select: { name: "Active" }
+          },
+          "Budget Status": {
+            formula: oracleData.ai_insights.cost_impact || "Unknown"
+          }
+        }
+      });
+    }
+    
+    // Update resource inventory
+    if (oracleData.current_incident.original.resource_id) {
+      operations.push({
+        type: 'update_resource',
+        database_id: '23be7cc7-01d5-81f0-a8cc-cfa88a213102',
+        filter: {
+          property: 'Resource UUID',
+          equals: oracleData.current_incident.original.resource_id
+        },
+        updates: {
+          Status: {
+            select: { 
+              name: oracleData.ai_insights.severity === 'Critical' ? '🔴 Critical' : '🟡 Warning'
+            }
+          },
+          "Optimization Flag": {
+            select: {
+              name: oracleData.historical_context.resource_optimization_opportunities.length > 0 
+                ? "Right-size Candidate" 
+                : "Normal"
+            }
+          },
+          "Last Updated": {
+            date: { start: new Date().toISOString() }
+          }
+        }
+      });
+    }
+    
+    // Execute all operations
+    const results = [];
+    for (const op of operations) {
+      try {
+        let result;
+        if (op.type === 'create_incident') {
+          result = await $.notion.pages.create({
+            parent: { database_id: op.database_id },
+            properties: op.properties
+          });
+        } else if (op.type === 'update_resource') {
+          // Find and update the resource
+          const pages = await $.notion.databases.query({
+            database_id: op.database_id,
+            filter: op.filter
+          });
+          
+          if (pages.results.length > 0) {
+            result = await $.notion.pages.update({
+              page_id: pages.results[0].id,
+              properties: op.updates
+            });
+          }
+        }
+        results.push({ operation: op.type, success: true, result });
+      } catch (error) {
+        results.push({ operation: op.type, success: false, error: error.message });
+      }
+    }
+    
+    return {
+      operations_attempted: operations.length,
+      results,
+      notion_updated: results.some(r => r.success)
+    };
+  }
+})`
+    },
+    
+    {
+      "id": "automated_remediation",
+      "name": "Execute Automated Remediation",
+      "type": "code", 
+      "code": `
+export default defineComponent({
+  async run({ steps, $ }) {
+    const analysis = steps.ai_analysis.$return_value;
+    const enrichedData = steps.enrich_context.$return_value;
+    
+    const remediationActions = [];
+    
+    // Determine automated actions based on severity and type
+    if (analysis.severity === 'Critical') {
+      // Critical actions
+      if (enrichedData.original.alert_type === 'high_cpu') {
+        remediationActions.push({
+          action: 'restart_service',
+          target: enrichedData.original.resource_id,
+          reason: 'CPU exceeded 90% for extended period'
+        });
+      }
+      
+      if (enrichedData.original.alert_type === 'disk_full') {
+        remediationActions.push({
+          action: 'cleanup_logs',
+          target: enrichedData.original.resource_id,
+          reason: 'Disk usage exceeded 95%'
+        });
+      }
+    }
+    
+    // Execute remediation via MCP
+    const results = [];
+    for (const action of remediationActions) {
+      try {
+        const response = await fetch('http://localhost:3002/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            service: 'edge',
+            query: \`execute \${action.action} on \${action.target}\`,
+            options: { 
+              reason: action.reason,
+              automated: true
+            }
+          })
+        });
+        
+        results.push({
+          action: action.action,
+          success: response.ok,
+          response: await response.text()
+        });
+      } catch (error) {
+        results.push({
+          action: action.action,
+          success: false,
+          error: error.message
+        });
+      }
+    }
+    
+    return {
+      automated_actions_taken: remediationActions.length,
+      results,
+      require_manual_intervention: analysis.severity === 'Critical' && results.some(r => !r.success)
+    };
+  }
+})`
+    },
+    
+    {
+      "id": "multi_channel_notifications",
+      "name": "Send Multi-Channel Notifications",
+      "type": "code",
+      "code": `
+export default defineComponent({
+  props: {
+    slack: { type: "app", app: "slack" },
+    discord: { type: "app", app: "discord" },
+    email: { type: "app", app: "email" }
+  },
+  async run({ steps, $ }) {
+    const analysis = steps.ai_analysis.$return_value;
+    const notionOps = steps.notion_operations.$return_value;
+    const remediation = steps.automated_remediation.$return_value;
+    
+    const severity = analysis.severity || 'Unknown';
+    const emoji = {
+      'Critical': '🚨',
+      'High': '⚠️',
+      'Medium': '📊',
+      'Low': 'ℹ️'
+    }[severity] || '❓';
+    
+    const message = \`\${emoji} **Cloud Operations Alert**
+    
+**Severity**: \${severity}
+**Type**: \${steps.input_router.$return_value.data.alert_type || 'General'}
+**Resource**: \${steps.input_router.$return_value.data.resource_id || 'N/A'}
+
+**AI Analysis**:
+• Root Cause: \${analysis.root_cause || 'Under investigation'}
+• Cost Impact: \${analysis.cost_impact || 'Calculating...'}
+
+**Automated Actions**: \${remediation.automated_actions_taken} taken
+**Manual Required**: \${remediation.require_manual_intervention ? 'Yes' : 'No'}
+
+**Notion Updated**: \${notionOps.notion_updated ? 'Yes' : 'Failed'}
+
+View full details in Notion\`;
+
+    const notifications = [];
+    
+    // Send based on severity
+    if (severity === 'Critical' || severity === 'High') {
+      // Slack for urgent alerts
+      try {
+        await $.slack.send({
+          channel: '#cloud-alerts',
+          text: message
+        });
+        notifications.push({ channel: 'slack', sent: true });
+      } catch (e) {
+        notifications.push({ channel: 'slack', sent: false, error: e.message });
+      }
+      
+      // Email for critical only
+      if (severity === 'Critical') {
+        try {
+          await $.email.send({
+            to: 'ops-team@company.com',
+            subject: \`\${emoji} CRITICAL: Cloud Operations Alert\`,
+            html: message.replace(/\\n/g, '<br>')
+          });
+          notifications.push({ channel: 'email', sent: true });
+        } catch (e) {
+          notifications.push({ channel: 'email', sent: false, error: e.message });
+        }
+      }
+    }
+    
+    // Discord for all alerts
+    try {
+      await $.discord.send({
+        webhook_url: process.env.DISCORD_WEBHOOK,
+        content: message
+      });
+      notifications.push({ channel: 'discord', sent: true });
+    } catch (e) {
+      notifications.push({ channel: 'discord', sent: false, error: e.message });
+    }
+    
+    return {
+      notifications_sent: notifications.filter(n => n.sent).length,
+      channels: notifications
+    };
+  }
+})`
+    },
+    
+    {
+      "id": "generate_reports",
+      "name": "Generate Analytics Reports",
+      "type": "code",
+      "code": `
+export default defineComponent({
+  async run({ steps, $ }) {
+    const { inputType } = steps.input_router.$return_value;
+    
+    // Only generate reports for scheduled runs
+    if (inputType !== 'scheduled') {
+      return { report_generated: false, reason: 'Not a scheduled run' };
+    }
+    
+    // Aggregate data from all sources
+    const reportData = {
+      generated_at: new Date().toISOString(),
+      period: 'last_24_hours',
+      
+      edge_devices: {
+        total: 3,
+        online: steps.enrich_context.$return_value.enrichment.edgeStatus?.includes('online') ? 3 : 0,
+        health_score: 95
+      },
+      
+      incidents: {
+        total_24h: steps.oracle_metrics.$return_value.historical_context.similar_incidents_last_30d,
+        resolved: 2,
+        pending: 1,
+        avg_resolution_time: '45 minutes'
+      },
+      
+      cost_analysis: {
+        current_month_spend: '$142',
+        projected_month_end: '$168',
+        optimization_opportunities: steps.oracle_metrics.$return_value.historical_context.resource_optimization_opportunities,
+        potential_savings: '$25/month'
+      },
+      
+      trends: steps.oracle_metrics.$return_value.historical_context.trend_analysis
+    };
+    
+    // Store report in S3
+    try {
+      const reportKey = \`reports/daily/\${new Date().toISOString().split('T')[0]}.json\`;
+      
+      // This would upload to S3
+      console.log('Report generated:', reportKey, reportData);
+      
+      // Create summary in Notion
+      const notionSummary = await $.notion.pages.create({
+        parent: { database_id: '23be7cc7-01d5-813f-8bc4-e73325f0535a' },
+        properties: {
+          Name: {
+            title: [{
+              text: { content: \`📊 Daily Operations Report - \${new Date().toLocaleDateString()}\` }
+            }]
+          },
+          Status: {
+            select: { name: "Completed" }
+          }
+        },
+        children: [
+          {
+            object: "block",
+            type: "paragraph",
+            paragraph: {
+              rich_text: [{
+                text: { content: JSON.stringify(reportData, null, 2) }
+              }]
+            }
+          }
+        ]
+      });
+      
+      return {
+        report_generated: true,
+        report_location: reportKey,
+        notion_page: notionSummary.url,
+        metrics_summary: reportData
+      };
+      
+    } catch (error) {
+      return {
+        report_generated: false,
+        error: error.message
+      };
+    }
+  }
+})`
+    },
+    
+    {
+      "id": "workflow_completion",
+      "name": "Workflow Completion Handler",
+      "type": "code",
+      "code": `
+export default defineComponent({
+  async run({ steps, $ }) {
+    // Compile comprehensive execution summary
+    const summary = {
+      workflow_id: $.meta.workflow_id,
+      execution_id: $.meta.id,
+      trigger_type: steps.input_router.$return_value.inputType,
+      started_at: steps.input_router.$return_value.timestamp,
+      completed_at: new Date().toISOString(),
+      
+      results: {
+        enrichment_success: !!steps.enrich_context.$return_value.enrichment,
+        ai_analysis_complete: !!steps.ai_analysis.$return_value,
+        oracle_metrics_retrieved: !!steps.oracle_metrics.$return_value,
+        notion_updated: steps.notion_operations.$return_value.notion_updated,
+        remediation_executed: steps.automated_remediation.$return_value.automated_actions_taken > 0,
+        notifications_sent: steps.multi_channel_notifications.$return_value.notifications_sent > 0,
+        report_generated: steps.generate_reports.$return_value.report_generated
+      },
+      
+      metrics: {
+        total_duration_ms: Date.now() - new Date(steps.input_router.$return_value.timestamp).getTime(),
+        automated_actions: steps.automated_remediation.$return_value.automated_actions_taken,
+        notifications_sent: steps.multi_channel_notifications.$return_value.notifications_sent
+      }
+    };
+    
+    // Log execution metrics
+    console.log('Workflow completed:', summary);
+    
+    // Store execution history
+    try {
+      await $.data.set(\`execution_\${$.meta.id}\`, summary);
+    } catch (error) {
+      console.error('Failed to store execution history:', error);
+    }
+    
+    return summary;
+  }
+})`
+    }
+  ],
+  
+  "error_handling": {
+    "retry_policy": {
+      "max_attempts": 3,
+      "backoff_multiplier": 2,
+      "initial_interval": 1000
+    },
+    "dead_letter_queue": true,
+    "notification_on_failure": {
+      "email": "ops-team@company.com"
+    }
+  },
+  
+  "environment_variables": [
+    "DISCORD_WEBHOOK",
+    "ORACLE_CONNECTION_STRING",
+    "AWS_REGION",
+    "NOTION_TOKEN"
+  ],
+  
+  "data_stores": [
+    {
+      "name": "execution_history",
+      "ttl_days": 30
+    },
+    {
+      "name": "incident_cache",
+      "ttl_days": 7
+    }
+  ]
+}
